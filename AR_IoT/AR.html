@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src='https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js'></script>
+</head>
+
+<script>
+	var leds = {};
+	
+	AFRAME.registerComponent('model-interaction',{
+		init: function() {
+			const el = this.el;
+			
+			el.addEventListener('model-loaded', function() {
+				el.object3D.traverse(function(node) {
+					if(node.isMesh) {
+						leds[node.name] = node;
+						node.material = node.material.clone();
+						if (node.name ==='Led24') {
+							node.material.color.set('orange');
+						}
+					}
+				});
+				const e = new Event('ledsLoaded');
+				document.dispatchEvent(e);
+			});
+        },
+	});
+</script>
+
+<body>
+    <a-scene embedded arjs>
+		<a-marker preset='custom' type='pattern'
+			url='https://raw.githubusercontent.com/gnietof/Labs/main/AR_IoT/pattern-logo.patt'>
+			<a-entity model-interaction gltf-model='https://raw.githubusercontent.com/gnietof/Labs/main/AR_IoT/sensehat.gltf' position="0 0 0" rotation="-45 45 -45" scale='0.2 0.2 0.2'
+				class='clickable'>            
+		</a-entity>
+        </a-marker>
+        <a-entity camera></a-entity>
+    </a-scene>
+</body>
+
+<script>
+    let client = undefined;
+	
+    // Una vez inicializado el objeto 3D, se carga el código para gestionar
+    // los mensajes que llegan del bróker.
+    document.addEventListener('ledsLoaded',function() {
+		console.log('Initialized');
+		
+		// Abrimos la conexión con el bróker Mosquitto.
+		// El puerto 8081 es el reservado a WebSockets con conexión segura.
+		let client = mqtt.connect('wss://test.mosquitto.org:8081');
+	
+		client.on('connect',() => {
+			console.log('Connected!');
+		});
+		
+		// Nos subscribimos para recibir los mensajes de todos los grupos.
+		client.subscribe('/sensehat/+',{},(error,granted) => {
+			if (error) {
+				console.log('Error!');
+			} else {
+				console.log('Subscribed!');
+			}
+		});
+
+		// Cuando se recibe un mensaje del broker, se extrae el grupo y
+		// el color del mensaje y se actualiza la pantalla LED
+		client.on('message', (topic, payload, packet) => {
+			const j = JSON.parse(payload.toString());
+			setGroupColor(topic.slice(10),j.color);
+		});
+
+	});
+	
+	// Ilumina un rectángulo de 2x2 en la pantalla LED
+	// a partir del id del grupo y el color indicado.
+	function setGroupColor(id,color) {
+		const row = id>>2;
+		const col = id%4;
+		
+		setColor(2*row,2*col,color);
+		setColor(2*row+1,2*col,color);
+		setColor(2*row,2*col+1,color);
+		setColor(2*row+1,2*col+1,color);
+	}
+
+	// Ilumina un LED de la pantalla a partir de sus coordenadas.
+	function setColor(x,y,color) {
+		this.leds['Led'+(x+1)+(y+1)].material.color.set(color);
+	}
+</script>
+
+</html>
