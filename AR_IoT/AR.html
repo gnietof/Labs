@@ -18,9 +18,6 @@
 					if(node.isMesh) {
 						leds[node.name] = node;
 						node.material = node.material.clone();
-						if (node.name ==='Led24') {
-							node.material.color.set('orange');
-						}
 					}
 				});
 				const e = new Event('ledsLoaded');
